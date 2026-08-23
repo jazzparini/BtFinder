@@ -15,7 +15,7 @@ import com.example.btfinder.service.BluetoothScanService
 import com.example.btfinder.ui.FinderScreen
 import com.example.btfinder.ui.FinderViewModel
 import com.example.btfinder.ui.FinderViewModelFactory
-import com.example.btfinder.util.BeepPlayer
+import com.example.btfinder.util.DeviceBeeper
 import com.example.btfinder.util.Permissions
 import com.example.btfinder.util.VibratorHelper
 
@@ -37,7 +37,7 @@ class MainActivity : ComponentActivity() {
 
         val repository = BluetoothRepository(applicationContext)
         val preferences = PreferencesRepository(applicationContext)
-        val beepPlayer = BeepPlayer()
+        val beepPlayer = DeviceBeeper(applicationContext)
         val vibratorHelper = VibratorHelper(applicationContext)
 
         setContent {

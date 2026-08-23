@@ -10,7 +10,7 @@ import com.example.btfinder.domain.Proximity
 import com.example.btfinder.domain.RssiFilter
 import com.example.btfinder.domain.isImprovement
 import com.example.btfinder.domain.proximityFromRssi
-import com.example.btfinder.util.BeepPlayer
+import com.example.btfinder.util.DeviceBeeper
 import com.example.btfinder.util.VibratorHelper
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
 class FinderViewModel(
     private val repository: BluetoothRepository,
     private val preferences: PreferencesRepository,
-    private val beepPlayer: BeepPlayer,
+    private val beepPlayer: DeviceBeeper,
     private val vibratorHelper: VibratorHelper
 ) : ViewModel() {
 
@@ -147,7 +147,7 @@ class FinderViewModel(
                 val interval = beepIntervalMillis(_uiState.value.proximity)
 
                 if (interval != null) {
-                    beepPlayer.play(durationMillis = (interval * 0.6).toInt())
+                    beepPlayer.beep(target.address)
                     delay(interval)
                 } else {
                     delay(300)
@@ -216,7 +216,7 @@ class FinderViewModel(
 
     /** Botón de prueba de sonido (incluido en el MVP, sección 2 / RF-06). */
     fun testSound() {
-        beepPlayer.play()
+        beepPlayer.beep(_uiState.value.selectedDevice?.address)
     }
 
     override fun onCleared() {

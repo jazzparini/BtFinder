@@ -49,7 +49,7 @@ class BluetoothScanService : Service() {
             this,
             CHANNEL_ID
         )
-            .setContentTitle("BT Finder está buscando")
+            .setContentTitle("Your Phone Radar está buscando")
             .setContentText("Escaneando dispositivos Bluetooth cercanos")
             .setSmallIcon(android.R.drawable.ic_menu_search)
             .setOngoing(true)

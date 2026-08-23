@@ -4,13 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.example.btfinder.data.BluetoothRepository
 import com.example.btfinder.data.PreferencesRepository
-import com.example.btfinder.util.BeepPlayer
+import com.example.btfinder.util.DeviceBeeper
 import com.example.btfinder.util.VibratorHelper
 
 class FinderViewModelFactory(
     private val repository: BluetoothRepository,
     private val preferences: PreferencesRepository,
-    private val beepPlayer: BeepPlayer,
+    private val beepPlayer: DeviceBeeper,
     private val vibratorHelper: VibratorHelper
 ) : ViewModelProvider.Factory {
 

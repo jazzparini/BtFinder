@@ -45,7 +45,7 @@ fun FinderScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            text = "BT Finder",
+            text = "Your Phone Radar",
             style = MaterialTheme.typography.headlineMedium
         )
 
