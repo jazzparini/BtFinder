@@ -86,6 +86,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestBluetoothPermissions() {
+        if (Permissions.hasBluetoothPermissions(applicationContext)) return
         permissionsLauncher.launch(Permissions.requiredBluetoothPermissions())
     }
 
