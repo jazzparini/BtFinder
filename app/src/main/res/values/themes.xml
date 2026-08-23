@@ -1,0 +1,4 @@
+<resources>
+    <!-- Tema base Material3 usado por la Activity que aloja el contenido Compose. -->
+    <style name="Theme.App" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

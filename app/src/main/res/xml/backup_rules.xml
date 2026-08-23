@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  BT Finder no respalda datos personales. Solo se guarda localmente la dirección
+  MAC del último dispositivo seleccionado (ver PreferencesRepository.kt), sin
+  tokens, cuentas ni información de usuario, conforme al criterio de aceptación
+  del MVP: "No utiliza tokens, servidores ni datos personales".
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="." />
+</full-backup-content>
