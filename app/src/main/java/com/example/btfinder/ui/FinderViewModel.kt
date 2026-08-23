@@ -40,6 +40,7 @@ class FinderViewModel(
     private var timeoutJob: Job? = null
     private var classicJob: Job? = null
     private var beepJob: Job? = null
+    private var radarPingJob: Job? = null
 
     private var bleProximity: Proximity = Proximity.NOT_FOUND
     private var classicConnected: Boolean = false
@@ -154,6 +155,17 @@ class FinderViewModel(
                 }
             }
         }
+
+        // RF adicional: "ping" de sonar por el propio audífono, sincronizado
+        // con el barrido visual del radar (misma duración que el tween de
+        // RadarView), para confirmar que la búsqueda sigue activa incluso
+        // antes de detectar el dispositivo.
+        radarPingJob = viewModelScope.launch {
+            while (isActive) {
+                delay(RADAR_SWEEP_PERIOD_MILLIS)
+                beepPlayer.ping(target.address)
+            }
+        }
     }
 
     private fun beepIntervalMillis(proximity: Proximity): Long? = when (proximity) {
@@ -210,15 +222,22 @@ class FinderViewModel(
         timeoutJob?.cancel()
         classicJob?.cancel()
         beepJob?.cancel()
+        radarPingJob?.cancel()
 
         scanJob = null
         timeoutJob = null
         classicJob = null
         beepJob = null
+        radarPingJob = null
 
         _uiState.value = _uiState.value.copy(
             isScanning = false
         )
+    }
+
+    private companion object {
+        /** Debe coincidir con la duración del tween de barrido en RadarView. */
+        const val RADAR_SWEEP_PERIOD_MILLIS = 3_000L
     }
 
     /** Botón de prueba de sonido (incluido en el MVP, sección 2 / RF-06). */

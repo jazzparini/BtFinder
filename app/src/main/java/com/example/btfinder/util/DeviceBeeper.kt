@@ -12,7 +12,7 @@ import kotlin.math.PI
 import kotlin.math.sin
 
 /**
- * Pitido para ubicar el audífono/dispositivo de audio (RF adicional).
+ * Sonidos para ubicar el audífono/dispositivo de audio (RF adicional).
  *
  * A diferencia de ToneGenerator (que solo suena por el altavoz del
  * teléfono salvo que el sistema decida enrutarlo), esto usa AudioTrack con
@@ -21,25 +21,46 @@ import kotlin.math.sin
  * HearingAid). Si el dispositivo no aparece como salida de audio activa,
  * se hace un fallback silencioso al enrutamiento por defecto (altavoz).
  *
- * El tono es agudo para distinguirse fácil del ruido ambiente, pero corto
- * (220 ms) y a volumen moderado (no al máximo posible), y respeta el
- * volumen de alarma que el usuario tenga configurado: no se sube el
- * volumen del sistema por su cuenta. Esto evita un pitido dañino, sobre
- * todo importante si suena por un audífono que puede amplificar el sonido.
+ * Hay dos tonos, ambos cortos y a volumen moderado (nunca al máximo) para
+ * no dañar el oído si suenan por un audífono que amplifica:
+ * - [beep]: agudo (3800 Hz), más seguido cuanto más cerca (RF-05).
+ * - [ping]: tipo "sonar" (1200 Hz, con caída), sincronizado con el barrido
+ *   visual del radar, para confirmar que la búsqueda sigue activa aunque
+ *   el dispositivo no se detecte todavía.
  */
 class DeviceBeeper(private val context: Context) {
 
     private val sampleRate = 44_100
-    private val frequencyHz = 3_800.0
-    private val durationSeconds = 0.22
-    private val toneData: ShortArray by lazy { buildTone() }
 
-    private var audioTrack: AudioTrack? = null
+    private val beepToneData: ShortArray by lazy {
+        buildTone(frequencyHz = 3_800.0, durationSeconds = 0.22, amplitudeScale = 0.5)
+    }
+    private val pingToneData: ShortArray by lazy {
+        buildTone(frequencyHz = 1_200.0, durationSeconds = 0.3, amplitudeScale = 0.35)
+    }
+
+    private var beepTrack: AudioTrack? = null
+    private var pingTrack: AudioTrack? = null
+
+    fun beep(targetDeviceAddress: String?) {
+        val track = beepTrack ?: buildTrack(beepToneData)?.also { beepTrack = it } ?: return
+        play(track, targetDeviceAddress)
+    }
+
+    fun ping(targetDeviceAddress: String?) {
+        val track = pingTrack ?: buildTrack(pingToneData)?.also { pingTrack = it } ?: return
+        play(track, targetDeviceAddress)
+    }
+
+    fun release() {
+        beepTrack?.release()
+        beepTrack = null
+        pingTrack?.release()
+        pingTrack = null
+    }
 
     @SuppressLint("MissingPermission")
-    fun beep(targetDeviceAddress: String?) {
-        val track = ensureTrack() ?: return
-
+    private fun play(track: AudioTrack, targetDeviceAddress: String?) {
         track.setPreferredDevice(targetDeviceAddress?.let(::findOutputDevice))
 
         if (track.playState == AudioTrack.PLAYSTATE_PLAYING) {
@@ -49,14 +70,7 @@ class DeviceBeeper(private val context: Context) {
         track.play()
     }
 
-    fun release() {
-        audioTrack?.release()
-        audioTrack = null
-    }
-
-    private fun ensureTrack(): AudioTrack? {
-        audioTrack?.let { return it }
-
+    private fun buildTrack(toneData: ShortArray): AudioTrack? {
         val attributes = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_ALARM)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -77,7 +91,6 @@ class DeviceBeeper(private val context: Context) {
                 AudioManager.AUDIO_SESSION_ID_GENERATE
             ).also {
                 it.write(toneData, 0, toneData.size)
-                audioTrack = it
             }
         }.getOrNull()
     }
@@ -108,10 +121,14 @@ class DeviceBeeper(private val context: Context) {
         return false
     }
 
-    private fun buildTone(): ShortArray {
+    private fun buildTone(
+        frequencyHz: Double,
+        durationSeconds: Double,
+        amplitudeScale: Double
+    ): ShortArray {
         val sampleCount = (sampleRate * durationSeconds).toInt()
         val fadeSamples = (sampleRate * 0.015).toInt()
-        val amplitude = Short.MAX_VALUE * 0.5
+        val amplitude = Short.MAX_VALUE * amplitudeScale
 
         return ShortArray(sampleCount) { i ->
             val angle = 2.0 * PI * frequencyHz * i / sampleRate
