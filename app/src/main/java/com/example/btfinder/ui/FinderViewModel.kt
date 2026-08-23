@@ -166,13 +166,20 @@ class FinderViewModel(
 
     /**
      * Combina la señal BLE (con distancia aproximada) y la conexión clásica
-     * (sin distancia) en el estado único que ve la UI. La conexión clásica
-     * tiene prioridad porque, a diferencia del RSSI BLE, confirma que el
-     * audífono está realmente conectado en este momento.
+     * (sin distancia) en el estado único que ve la UI. El RSSI BLE tiene
+     * prioridad siempre que haya datos recientes: es la única fuente que da
+     * una distancia real (efecto "radar/Pokédex": se acerca o se aleja). La
+     * conexión clásica es solo un respaldo binario (conectado/no) para
+     * cuando el dispositivo nunca se anuncia por BLE, así que NO debe tapar
+     * un RSSI real si este está disponible.
      */
     private fun applyProximity() {
         val previousProximity = _uiState.value.proximity
-        val nextProximity = if (classicConnected) Proximity.CONNECTED else bleProximity
+        val nextProximity = when {
+            bleProximity != Proximity.NOT_FOUND -> bleProximity
+            classicConnected -> Proximity.CONNECTED
+            else -> Proximity.NOT_FOUND
+        }
 
         if (nextProximity == previousProximity) return
 
