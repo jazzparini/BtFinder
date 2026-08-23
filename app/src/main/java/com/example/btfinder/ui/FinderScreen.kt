@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
  * (accesible como .name en Kotlin) y, si el dispositivo no reporta nombre,
  * se muestra su dirección MAC.
  */
-@SuppressLint("MissingPermission")
+@get:SuppressLint("MissingPermission")
 private val BluetoothDevice.displayLabel: String
     get() = name ?: address
 
