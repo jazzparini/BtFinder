@@ -27,7 +27,25 @@ compilarse ahí. Hay dos formas de conseguirlo:
    teléfono y se instala tocándolo (activando antes "Instalar apps de
    origen desconocido" para el instalador que uses).
 
-### Opción B — Compilar en la nube con GitHub Actions (sin instalar nada)
+### Opción B — Descargarlo desde GitHub Releases (recomendada)
+
+Cada versión etiquetada se compila automáticamente y publica un APK
+permanente en la sección [Releases](../../releases) del repositorio. Para
+instalarlo:
+
+1. Abrir **Releases** en GitHub y elegir la versión más reciente.
+2. En **Assets**, descargar `BTFinder-vX.Y.Z.apk`.
+3. Copiar el APK al teléfono e instalarlo, autorizando al instalador a
+   instalar apps de origen desconocido si Android lo solicita.
+
+Para publicar una versión, crear y enviar una etiqueta que comience por `v`:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+### Opción C — Compilar en la nube con GitHub Actions (sin instalar nada)
 
 El proyecto ya incluye `.github/workflows/build-apk.yml`.
 
@@ -39,7 +57,9 @@ El proyecto ya incluye `.github/workflows/build-apk.yml`.
 3. Cuando el workflow termina (unos minutos), entrar a esa ejecución y
    descargar el artefacto `bt-finder-debug-apk` (es un .zip que contiene
    el `app-debug.apk`).
-4. Pasar el APK al teléfono (por cable, Drive, etc.) e instalarlo.
+4. Pasar el APK al teléfono (por cable, Drive, etc.) e instalarlo. Los
+   artefactos de Actions son temporales; usar **Releases** para una descarga
+   permanente en el repositorio.
 
 Ambas opciones producen un APK de **depuración** (sin firmar para Play
 Store), que es lo normal para instalar manualmente en un teléfono propio.
