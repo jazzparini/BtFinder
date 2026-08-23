@@ -9,6 +9,12 @@ enum class Proximity(
     val label: String,
     val emoji: String
 ) {
+    /**
+     * Estado de dispositivos Bluetooth clásicos (A2DP/HFP/HearingAid) que no
+     * se anuncian por BLE: no hay RSSI disponible, solo se sabe que está
+     * conectado (ver sección 10 del documento de diseño).
+     */
+    CONNECTED("Conectado (sin distancia disponible)", "🔵"),
     VERY_CLOSE("Muy cerca", "🟢"),
     CLOSE("Cerca", "🟡"),
     FAR("Lejos", "🟠"),
@@ -36,7 +42,8 @@ fun isImprovement(previous: Proximity?, next: Proximity): Boolean {
         Proximity.WEAK,
         Proximity.FAR,
         Proximity.CLOSE,
-        Proximity.VERY_CLOSE
+        Proximity.VERY_CLOSE,
+        Proximity.CONNECTED
     )
     return order.indexOf(next) > order.indexOf(previous)
 }

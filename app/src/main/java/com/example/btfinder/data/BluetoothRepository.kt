@@ -3,10 +3,15 @@ package com.example.btfinder.data
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.BluetoothLeScanner
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import androidx.core.content.ContextCompat
 import com.example.btfinder.util.Permissions
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -84,6 +89,90 @@ class BluetoothRepository(
 
         awaitClose {
             scanner.stopScan(callback)
+        }
+    }
+
+    /**
+     * RF-03 fallback (sección 10, "Consideración importante"): los audífonos
+     * Bluetooth clásicos (A2DP/HFP/HearingAid) no se anuncian por BLE, así
+     * que no aparecen en [scanResults]. Aquí se expone su estado de conexión
+     * clásico (conectado/no conectado) como sustituto del RSSI, combinando
+     * un chequeo inicial vía los proxies de perfil con las notificaciones
+     * ACL en vivo del sistema.
+     */
+    @SuppressLint("MissingPermission")
+    fun classicConnectionUpdates(device: BluetoothDevice): Flow<Boolean> = callbackFlow {
+        val bluetoothAdapter = adapter
+        if (bluetoothAdapter == null || !hasBluetoothPermissions()) {
+            trySend(false)
+            awaitClose { }
+            return@callbackFlow
+        }
+
+        val classicProfiles = intArrayOf(
+            BluetoothProfile.HEADSET,
+            BluetoothProfile.A2DP,
+            BluetoothProfile.HEARING_AID
+        )
+        val connectedProfiles = mutableSetOf<Int>()
+        val activeProxies = mutableListOf<Pair<Int, BluetoothProfile>>()
+
+        fun isConnectedNow(): Boolean =
+            activeProxies.any { (_, proxy) ->
+                proxy.connectedDevices.any { it.address == device.address }
+            }
+
+        val serviceListener = object : BluetoothProfile.ServiceListener {
+            override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
+                activeProxies.add(profile to proxy)
+                trySend(isConnectedNow())
+            }
+
+            override fun onServiceDisconnected(profile: Int) {
+                activeProxies.removeAll { it.first == profile }
+            }
+        }
+
+        classicProfiles.forEach { profile ->
+            bluetoothAdapter.getProfileProxy(context, serviceListener, profile)
+        }
+
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(receiverContext: Context, intent: Intent) {
+                val eventDevice = intent.getBluetoothDeviceExtra() ?: return
+                if (eventDevice.address != device.address) return
+
+                when (intent.action) {
+                    BluetoothDevice.ACTION_ACL_CONNECTED -> trySend(true)
+                    BluetoothDevice.ACTION_ACL_DISCONNECTED -> trySend(isConnectedNow())
+                }
+            }
+        }
+
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            IntentFilter().apply {
+                addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
+                addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+            },
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+
+        awaitClose {
+            context.unregisterReceiver(receiver)
+            activeProxies.forEach { (profile, proxy) ->
+                bluetoothAdapter.closeProfileProxy(profile, proxy)
+            }
+        }
+    }
+
+    private fun Intent.getBluetoothDeviceExtra(): BluetoothDevice? {
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
         }
     }
 }

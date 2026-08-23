@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -37,6 +38,11 @@ class FinderViewModel(
     private val rssiFilter = RssiFilter()
     private var scanJob: Job? = null
     private var timeoutJob: Job? = null
+    private var classicJob: Job? = null
+    private var beepJob: Job? = null
+
+    private var bleProximity: Proximity = Proximity.NOT_FOUND
+    private var classicConnected: Boolean = false
 
     init {
         _uiState.value = _uiState.value.copy(
@@ -70,6 +76,9 @@ class FinderViewModel(
     }
 
     fun selectDevice(device: BluetoothDevice) {
+        bleProximity = Proximity.NOT_FOUND
+        classicConnected = false
+
         _uiState.value = _uiState.value.copy(
             selectedDevice = device,
             rssi = null,
@@ -87,6 +96,8 @@ class FinderViewModel(
         stopScan()
 
         rssiFilter.clear()
+        bleProximity = Proximity.NOT_FOUND
+        classicConnected = false
 
         _uiState.value = _uiState.value.copy(
             isScanning = true,
@@ -100,21 +111,14 @@ class FinderViewModel(
 
                     if (device.address == target.address) {
                         val filteredRssi = rssiFilter.add(result.rssi)
-                        val now = System.currentTimeMillis()
-                        val previousProximity = _uiState.value.proximity
-                        val nextProximity = proximityFromRssi(filteredRssi)
+                        bleProximity = proximityFromRssi(filteredRssi)
 
                         _uiState.value = _uiState.value.copy(
                             rssi = filteredRssi,
-                            proximity = nextProximity,
-                            lastSeenMillis = now
+                            lastSeenMillis = System.currentTimeMillis()
                         )
 
-                        // MVP sección 2: "Vibración cuando la señal mejore".
-                        if (isImprovement(previousProximity, nextProximity)) {
-                            vibratorHelper.vibrateShort()
-                        }
-
+                        applyProximity()
                         restartNotFoundTimeout()
                     }
                 }
@@ -125,28 +129,85 @@ class FinderViewModel(
                 )
             }
         }
+
+        // Fallback para audífonos Bluetooth clásicos (sección 10): no se
+        // anuncian por BLE, así que se detecta su conexión por separado.
+        classicJob = viewModelScope.launch {
+            repository.classicConnectionUpdates(target).collect { connected ->
+                classicConnected = connected
+                applyProximity()
+            }
+        }
+
+        // RF adicional: pitidos tipo "detector de metales", más seguidos
+        // cuanto más cerca está el audífono, para ubicarlo sin mirar la
+        // pantalla. En NOT_FOUND no suena nada.
+        beepJob = viewModelScope.launch {
+            while (isActive) {
+                val interval = beepIntervalMillis(_uiState.value.proximity)
+
+                if (interval != null) {
+                    beepPlayer.play(durationMillis = (interval * 0.6).toInt())
+                    delay(interval)
+                } else {
+                    delay(300)
+                }
+            }
+        }
+    }
+
+    private fun beepIntervalMillis(proximity: Proximity): Long? = when (proximity) {
+        Proximity.CONNECTED, Proximity.VERY_CLOSE -> 220L
+        Proximity.CLOSE -> 450L
+        Proximity.FAR -> 900L
+        Proximity.WEAK -> 1600L
+        Proximity.NOT_FOUND -> null
+    }
+
+    /**
+     * Combina la señal BLE (con distancia aproximada) y la conexión clásica
+     * (sin distancia) en el estado único que ve la UI. La conexión clásica
+     * tiene prioridad porque, a diferencia del RSSI BLE, confirma que el
+     * audífono está realmente conectado en este momento.
+     */
+    private fun applyProximity() {
+        val previousProximity = _uiState.value.proximity
+        val nextProximity = if (classicConnected) Proximity.CONNECTED else bleProximity
+
+        if (nextProximity == previousProximity) return
+
+        _uiState.value = _uiState.value.copy(proximity = nextProximity)
+
+        // MVP sección 2: "Vibración cuando la señal mejore".
+        if (isImprovement(previousProximity, nextProximity)) {
+            vibratorHelper.vibrateShort()
+        }
     }
 
     private fun restartNotFoundTimeout() {
         timeoutJob?.cancel()
 
-        // RF-05: sin recepción durante 8 s -> "No detectado".
+        // RF-05: sin recepción BLE durante 8 s -> vuelve al estado clásico
+        // (conectado o no detectado, según [classicConnected]).
         timeoutJob = viewModelScope.launch {
             delay(8_000)
 
-            _uiState.value = _uiState.value.copy(
-                rssi = null,
-                proximity = Proximity.NOT_FOUND
-            )
+            bleProximity = Proximity.NOT_FOUND
+            _uiState.value = _uiState.value.copy(rssi = null)
+            applyProximity()
         }
     }
 
     fun stopScan() {
         scanJob?.cancel()
         timeoutJob?.cancel()
+        classicJob?.cancel()
+        beepJob?.cancel()
 
         scanJob = null
         timeoutJob = null
+        classicJob = null
+        beepJob = null
 
         _uiState.value = _uiState.value.copy(
             isScanning = false

@@ -12,18 +12,19 @@ class BeepPlayer {
 
     private var toneGenerator: ToneGenerator? = null
 
-    fun play() {
-        toneGenerator?.release()
-
-        toneGenerator = ToneGenerator(
+    /**
+     * [durationMillis] es corto por defecto para permitir pitidos repetidos
+     * a intervalos cortos (RF: pitidos más frecuentes cerca del audífono)
+     * sin que se solapen entre sí. Reutiliza el mismo ToneGenerator en vez
+     * de recrearlo en cada llamada para evitar cortes audibles al repetir.
+     */
+    fun play(durationMillis: Int = 400) {
+        val generator = toneGenerator ?: ToneGenerator(
             AudioManager.STREAM_ALARM,
             100
-        )
+        ).also { toneGenerator = it }
 
-        toneGenerator?.startTone(
-            ToneGenerator.TONE_PROP_BEEP,
-            400
-        )
+        generator.startTone(ToneGenerator.TONE_PROP_BEEP, durationMillis)
     }
 
     fun release() {

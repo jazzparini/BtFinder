@@ -94,6 +94,14 @@ fun FinderScreen(
             }
         }
 
+        if (state.isScanning) {
+            RadarView(
+                proximity = state.proximity,
+                deviceKey = state.selectedDevice?.address,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
         Text(
             text = "${state.proximity.emoji} ${state.proximity.label}",
             style = MaterialTheme.typography.headlineSmall
