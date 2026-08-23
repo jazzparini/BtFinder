@@ -61,7 +61,7 @@ fun FinderScreen(
             )
         }
 
-        Text(text = "Selecciona un dispositivo vinculado")
+        Text(text = "Selecciona un dispositivo conectado")
 
         Button(
             onClick = { expanded = true },
@@ -79,7 +79,7 @@ fun FinderScreen(
         ) {
             if (state.pairedDevices.isEmpty()) {
                 DropdownMenuItem(
-                    text = { Text("No hay dispositivos vinculados") },
+                    text = { Text("No hay dispositivos Bluetooth conectados") },
                     onClick = { expanded = false }
                 )
             }

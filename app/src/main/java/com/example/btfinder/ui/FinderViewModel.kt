@@ -1,6 +1,5 @@
 package com.example.btfinder.ui
 
-import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -53,19 +52,20 @@ class FinderViewModel(
     }
 
     /**
-     * RF-02 + persistencia: carga los dispositivos vinculados y, si existe,
-     * vuelve a seleccionar el último dispositivo usado.
+     * RF-02 + persistencia: carga los dispositivos conectados ahora mismo
+     * al Bluetooth del teléfono y, si el último usado sigue entre ellos,
+     * vuelve a seleccionarlo.
      */
-    @SuppressLint("MissingPermission")
     fun loadPairedDevices() {
-        val devices = repository.pairedDevices()
-
         _uiState.value = _uiState.value.copy(
-            bluetoothEnabled = repository.isBluetoothEnabled(),
-            pairedDevices = devices
+            bluetoothEnabled = repository.isBluetoothEnabled()
         )
 
         viewModelScope.launch {
+            val devices = repository.connectedDevices()
+
+            _uiState.value = _uiState.value.copy(pairedDevices = devices)
+
             val lastAddress = preferences.lastDeviceAddress.first()
 
             if (lastAddress != null && _uiState.value.selectedDevice == null) {

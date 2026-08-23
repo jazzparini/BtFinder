@@ -3,6 +3,7 @@ package com.example.btfinder.data
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.BluetoothLeScanner
 import android.bluetooth.le.ScanCallback
@@ -13,9 +14,15 @@ import android.content.Intent
 import android.content.IntentFilter
 import androidx.core.content.ContextCompat
 import com.example.btfinder.util.Permissions
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.resume
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 
 class BluetoothRepository(
     private val context: Context
@@ -35,14 +42,55 @@ class BluetoothRepository(
     fun isBluetoothSupported(): Boolean = adapter != null
 
     /**
-     * RF-02: dispositivos vinculados (emparejados) que el usuario puede seleccionar.
-     * Incluye audífonos Bluetooth clásicos, que pueden no anunciarse por BLE
-     * (ver "Consideración importante" en la sección 10 del documento de diseño).
+     * RF-02: dispositivos que el usuario puede seleccionar. A diferencia de
+     * [BluetoothAdapter.getBondedDevices] (todo lo emparejado alguna vez),
+     * esto solo incluye lo conectado ahora mismo, revisando tanto GATT/BLE
+     * como los perfiles de audio clásicos (A2DP/HFP/HearingAid), ya que
+     * estos últimos no se anuncian por BLE (sección 10 del documento de
+     * diseño) y requieren pedir un proxy por perfil para consultarlos.
      */
     @SuppressLint("MissingPermission")
-    fun pairedDevices(): List<BluetoothDevice> {
+    suspend fun connectedDevices(): List<BluetoothDevice> {
         if (!hasBluetoothPermissions()) return emptyList()
-        return adapter?.bondedDevices?.toList().orEmpty()
+        val bluetoothAdapter = adapter ?: return emptyList()
+
+        val connected = mutableSetOf<BluetoothDevice>()
+
+        runCatching {
+            val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+            connected.addAll(bluetoothManager.getConnectedDevices(BluetoothProfile.GATT))
+        }
+
+        val classicProfiles = intArrayOf(
+            BluetoothProfile.HEADSET,
+            BluetoothProfile.A2DP,
+            BluetoothProfile.HEARING_AID
+        )
+
+        coroutineScope {
+            classicProfiles.map { profile ->
+                async {
+                    withTimeoutOrNull(1_500) {
+                        suspendCancellableCoroutine<Unit> { continuation ->
+                            val listener = object : BluetoothProfile.ServiceListener {
+                                override fun onServiceConnected(p: Int, proxy: BluetoothProfile) {
+                                    connected.addAll(proxy.connectedDevices)
+                                    runCatching { bluetoothAdapter.closeProfileProxy(p, proxy) }
+                                    if (continuation.isActive) continuation.resume(Unit)
+                                }
+
+                                override fun onServiceDisconnected(p: Int) = Unit
+                            }
+
+                            val requested = bluetoothAdapter.getProfileProxy(context, listener, profile)
+                            if (!requested && continuation.isActive) continuation.resume(Unit)
+                        }
+                    }
+                }
+            }.awaitAll()
+        }
+
+        return connected.toList()
     }
 
     /**
